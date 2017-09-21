@@ -6,4 +6,5 @@
 /.psc*
 /.purs*
 /.psa*
-/dist
+/dist/*
+!/dist/index.html
