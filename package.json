@@ -1,0 +1,27 @@
+{
+  "name": "purescript-keycombos",
+  "version": "1.0.0",
+  "description": "A library for handling multiple simultaneous keyboard presses.",
+  "main": "webpack.config.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "webpack": "webpack",
+    "webpack:server": "webpack-dev-server"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dgendill/purescript-keycombos.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/dgendill/purescript-keycombos/issues"
+  },
+  "homepage": "https://github.com/dgendill/purescript-keycombos#readme",
+  "devDependencies": {
+    "webpack": "^3.6.0",
+    "webpack-dev-server": "^2.8.2"
+  }
+}
