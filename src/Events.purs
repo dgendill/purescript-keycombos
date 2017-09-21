@@ -1,6 +1,6 @@
 module KeyCombo.Events where
 
-import Control.Coroutine (Consumer, Producer, await, pullFrom, runProcess)
+import Control.Coroutine (Consumer, Producer, await, connect, pullFrom, runProcess)
 import Control.Coroutine.Aff (produce')
 import Control.Extend (extend, map, (<$>))
 import Control.Monad.Aff (Aff, forkAff)
@@ -8,7 +8,7 @@ import Control.Monad.Eff (Eff)
 import Control.Monad.Eff.AVar (AVAR)
 import Control.Monad.Eff.Class (liftEff)
 import Control.Monad.Eff.Console (CONSOLE)
-import Control.Monad.Eff.Ref (REF, Ref, modifyRef, modifyRef', newRef)
+import Control.Monad.Eff.Ref (REF, Ref, modifyRef, modifyRef', newRef, readRef)
 import Control.Monad.Except (lift, runExcept)
 import Control.Monad.Rec.Class (forever)
 import DOM (DOM)
@@ -23,7 +23,7 @@ import Data.Either (Either(..))
 import Data.Monoid (mempty, (<>))
 import Data.Monoid.Conj (Conj(..))
 import Data.Newtype (class Newtype, unwrap)
-import Data.StrMap (StrMap, delete, empty, fromFoldable, insert, isEmpty, keys, size, values)
+import Data.StrMap (StrMap, delete, empty, fromFoldable, insert, isEmpty, keys, member, size, values)
 import Data.StrMap (fold) as StrMap
 import Data.Tuple (Tuple(..), fst, snd)
 import Debug.Trace (spy, traceAnyM)
@@ -79,9 +79,10 @@ keyDownProducer = produce' \emit -> do
   addEventListener
     keydown
      (eventListener \e ->
+      -- do void $ traceAnyM e
       case runExcept $ eventToKeyboardEvent e of
         Right event -> emit $ Left (key event)
-        Left err -> pure unit -- emit $ Left ""
+        Left err -> pure unit
     )
     false
     (htmlDocumentToEventTarget document)
@@ -91,10 +92,10 @@ keyUpProducer = produce' \emit -> do
   document <- window >>= document
   addEventListener
     keyup
-    (eventListener \e ->
+    (eventListener \e ->      
       case runExcept $ eventToKeyboardEvent e of
         Right event -> emit $ Left (key event)
-        Left err -> emit $ Left ""
+        Left err -> pure unit
     )
     false
     (htmlDocumentToEventTarget document)
@@ -105,11 +106,15 @@ keyDownListener :: forall e
   -> Consumer String (KeyComboM e) Unit
 keyDownListener state (OnKeyDown fn) = forever $ do
   k <- await
-  r <- liftEff $ modifyRef' state (\s ->
-    let v = addKey k s
-    in { state : v, value : v }
-  )
-  lift $ fn k r
+  (KeyState {pressed}) <- liftEff $ readRef state
+  if (member k pressed)
+    then pure unit
+    else do
+      r <- liftEff $ modifyRef' state (\s ->
+        let v = addKey k s
+        in { state : v, value : v }
+      )
+      lift $ fn k r
 
 keyUpListener :: forall e
    . Ref KeyState
@@ -132,10 +137,9 @@ keyUpListener
             max m v
           ) 0.0 ((unwrap r).releaseQueue)
     
-    void $ traceAnyM $ (show latestKeyReleased) <> "  " <> (show now)
+    -- void $ traceAnyM $ (show latestKeyReleased) <> "  " <> (show now)
 
-
-    let combo = stateHasCombo 5.0 r
+    let combo = stateHasCombo 20.0 r
     case (isEmpty combo) of
       true -> pure unit
       false -> do
@@ -176,8 +180,8 @@ run keyDown keyUp keyComboRelease = do
     releaseQueue : empty
   })
   void $ forkAff (runProcess do
-    (keyUpListener r keyUp keyComboRelease) `pullFrom` keyUpProducer
+    connect keyUpProducer (keyUpListener r keyUp keyComboRelease)
   )
   void $ forkAff (runProcess do
-    (keyDownListener r keyDown) `pullFrom` keyDownProducer  
+    connect keyDownProducer (keyDownListener r keyDown) 
   )
