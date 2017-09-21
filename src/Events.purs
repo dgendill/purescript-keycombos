@@ -18,8 +18,9 @@ import DOM.HTML (window)
 import DOM.HTML.Event.EventTypes (keydown, keyup)
 import DOM.HTML.Types (htmlDocumentToEventTarget)
 import DOM.HTML.Window (document)
-import Data.Array (catMaybes, concat, fold, foldMap, foldl, head, nub, reverse, sort, sortBy, tail, zip, zipWith)
+import Data.Array (all, catMaybes, concat, fold, foldMap, foldl, head, intersect, nub, reverse, sort, sortBy, tail, zip, zipWith)
 import Data.Either (Either(..))
+import Data.Foldable (traverse_)
 import Data.Monoid (mempty, (<>))
 import Data.Monoid.Conj (Conj(..))
 import Data.Newtype (class Newtype, unwrap)
@@ -29,7 +30,7 @@ import Data.Tuple (Tuple(..), fst, snd)
 import Debug.Trace (spy, traceAnyM)
 import KeyCombo.Performance as Performance
 import Math (abs, min)
-import Prelude (class Show, Unit, bind, compare, discard, max, pure, show, unit, void, (#), ($), (&&), (-), (<), (>), (>>=))
+import Prelude (class Show, Unit, bind, compare, discard, flip, max, pure, show, unit, void, when, (#), ($), (&&), (-), (<), (==), (>), (>>=))
 
 newtype KeyState = KeyState {
   pressed :: StrMap Boolean,
@@ -54,6 +55,10 @@ newtype OnKeyUp e = OnKeyUp (String -> KeyState -> Aff (Effects e) Unit)
 -- | Event handler for multiple keys being
 -- | released all at approximatly the same time
 newtype OnComboRelease e = OnComboRelease (StrMap Number -> Aff (Effects e) Unit)
+
+-- | A set of event handlers that will trigger
+-- | when the specified characters are released
+newtype OnExactRelease e = OnExactRelease (Array (Tuple (Array String) (Unit -> Aff (Effects e) Unit)))
 
 type Effects e = (ref :: REF, avar :: AVAR, console :: CONSOLE, dom :: DOM | e)
 type KeyComboM e = Aff (Effects e)
@@ -120,24 +125,32 @@ keyUpListener :: forall e
    . Ref KeyState
   -> OnKeyUp e
   -> OnComboRelease e
+  -> OnExactRelease e
   -> Consumer String (KeyComboM e) Unit
 keyUpListener
   state
   (OnKeyUp keyUp)
-  (OnComboRelease comboRelease) = forever $ do
+  (OnComboRelease comboRelease)
+  (OnExactRelease exactReleases) = forever $ do
     k <- await
     now <- liftEff $ Performance.now
-    r <- liftEff $ modifyRef' state (\s ->
+    r@KeyState({ pressed, releaseQueue }) <- liftEff $ modifyRef' state (\s ->
       let v = removeKey k now s
       in { state : v, value : v }
     )
+
+    when (isEmpty pressed) $
+      lift $ exactReleases # traverse_ (\(Tuple userKeys action) -> do
+        let zipped = zip (keys releaseQueue) (values releaseQueue) 
+        let times = sortBy (\a b -> compare (snd a) (snd b)) zipped
+
+        let s1 = intersect (map fst times) userKeys
+        if s1 == userKeys
+          then action unit
+          else pure unit
+      )
+
     lift $ keyUp k r
-    
-    let latestKeyReleased = StrMap.fold (\m _ v ->
-            max m v
-          ) 0.0 ((unwrap r).releaseQueue)
-    
-    -- void $ traceAnyM $ (show latestKeyReleased) <> "  " <> (show now)
 
     let combo = stateHasCombo 20.0 r
     case (isEmpty combo) of
@@ -155,7 +168,7 @@ keyUpListener
 -- | than the limit
 stateHasCombo :: Number -> KeyState -> StrMap Number
 stateHasCombo limit (KeyState { pressed, releaseQueue}) =
-  case isEmpty pressed &&  size releaseQueue > 1 of
+  case isEmpty pressed && size releaseQueue > 1 of
     false -> empty
     true -> fromFoldable $ nub $ concat $ catMaybes do
       let zipped = zip (keys releaseQueue) (values releaseQueue) 
@@ -173,14 +186,15 @@ run :: forall e
    . OnKeyDown e
   -> OnKeyUp e
   -> OnComboRelease e
+  -> OnExactRelease e
   -> Aff (Effects e) Unit
-run keyDown keyUp keyComboRelease = do
+run keyDown keyUp keyComboRelease exactReleases = do
   r <- liftEff $ newRef (KeyState {
     pressed : empty,
     releaseQueue : empty
   })
   void $ forkAff (runProcess do
-    connect keyUpProducer (keyUpListener r keyUp keyComboRelease)
+    connect keyUpProducer (keyUpListener r keyUp keyComboRelease exactReleases)
   )
   void $ forkAff (runProcess do
     connect keyDownProducer (keyDownListener r keyDown) 

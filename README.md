@@ -1,7 +1,7 @@
 A library for handling multiple simultaneous keyboard presses.
 
-- [ ] release trigger
-- [ ] combo trigger
+- [x] exact triggers
+- [x] fast release trigger
 - [ ] minify code, rollup
-- [ ] js-only release
+- [ ] js-only release promises
 - [ ] demo

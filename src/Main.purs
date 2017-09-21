@@ -7,7 +7,8 @@ import Control.Monad.Eff.AVar (AVAR)
 import Control.Monad.Eff.Console (log) as Effc
 import Control.Monad.Eff.Ref (REF)
 import DOM (DOM)
-import KeyCombo.Events (run, OnKeyDown(..), OnKeyUp(..), OnComboRelease(..))
+import Data.Tuple (Tuple(..))
+import KeyCombo.Events (run, OnKeyDown(..), OnKeyUp(..), OnComboRelease(..), OnExactRelease(..))
 import Prelude (Unit, discard, show, ($), (<>))
 
 main :: forall e. Eff (ref :: REF , avar :: AVAR , dom :: DOM, console :: CONSOLE | e) Unit
@@ -23,6 +24,11 @@ main = do
     (OnComboRelease \k -> do
       log $ "Combo " <> (show k)
     )
+    (OnExactRelease [
+      Tuple ["a","s","d"] \k -> do
+        log $ "Exact Keypress a+s+d"
+
+    ])
 
 data KeyCombo
   = ReleaseRequired KeyCombo
