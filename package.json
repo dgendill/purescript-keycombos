@@ -7,8 +7,10 @@
     "test": "test"
   },
   "scripts": {
+    "dev": "npm run webpack:server",
     "webpack": "webpack",
-    "webpack:server": "webpack-dev-server"
+    "webpack:server": "webpack-dev-server",
+    "test": "pulp --watch test --main Test.FFI"
   },
   "repository": {
     "type": "git",

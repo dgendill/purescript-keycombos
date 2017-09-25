@@ -4,7 +4,7 @@ const plugins = [];
 // const UglifyJSPlugin = require('uglifyjs-webpack-plugin');
 
 module.exports = {
-  entry: './src/Main.purs',
+  entry: './test/Main.purs',
   target: 'web',
   output: {
     path: path.resolve(__dirname, 'dist'),
@@ -24,7 +24,8 @@ module.exports = {
             options: {
               src: [
                 'bower_components/purescript-*/src/**/*.purs',
-                'src/**/*.purs'
+                'src/**/*.purs',
+                'test/**/*.purs'
               ],
               bundle: false,
               psc: 'psa',
@@ -46,14 +47,14 @@ module.exports = {
     })
   ].concat(plugins),
 
-  // resolve: {
-  //   // Pull in vue
-  //   alias: {
-  //     vue: './vue.min.js',
-  //     jsmediatags : './jsmediatags.js',
-  //     ps : './ps.js',
-  //   }
-  // },
+  resolve: {
+    // Pull in vue
+    alias: {
+      vue: './vue.min.js',
+      jsmediatags : './jsmediatags.js',
+      ps : './ps.js',
+    }
+  },
   devServer: {
     contentBase: path.join(__dirname, "dist"),
     port: 9000,

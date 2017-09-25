@@ -1,5 +1,5 @@
 'use strict';
 
-exports.now = function() {
+exports.nowImpl = function() {
   return window.performance.now();    
 }
