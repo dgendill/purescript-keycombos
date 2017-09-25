@@ -112,5 +112,47 @@ exports.allObjectPairsImpl = function(o) {
 
 exports.isFunctionImpl = function(f) {
   var getType = {};
-  return functionToCheck && getType.toString.call(functionToCheck) === '[object Function]';
+  return f && getType.toString.call(f) === '[object Function]';
+}
+
+exports.getObjectKeyImpl = function(o) {
+  return function(key) {
+    return function(just) {
+      return function(nothing) {
+
+        if (o && o.hasOwnProperty(key)) {
+          return just(o[key]);
+        } else {
+          console.log(o, key)
+          return nothing;
+        }
+      }
+    }
+  }
+}
+
+exports.ffiEffFn1ToAffImpl = function ffiEffFn1ToAffImpl(fn) {
+  return function(v1) {
+    return function(error, success) {
+      fn(v1);
+      success();
+      return function (cancelError, onCancelerError, onCancelerSuccess) {
+        onCancelerSuccess();
+      }
+    }    
+  }
+}
+
+exports.ffiEffFn2ToAffImpl = function ffiEffFn2ToAffImpl(fn) {
+  return function(v1) {
+    return function(v2) {
+      return function(error, success) {
+        fn(v1, v2);
+        success();
+        return function (cancelError, onCancelerError, onCancelerSuccess) {
+          onCancelerSuccess();
+        }
+      }    
+    }
+  }
 }

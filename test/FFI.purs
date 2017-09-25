@@ -5,6 +5,7 @@ import Prelude
 
 import Control.Monad.Aff.Console (log)
 import Data.Foreign (toForeign)
+import Data.Maybe (Maybe(..))
 import Data.Ord (lessThan)
 import Data.Tuple (Tuple(..))
 import Data.Validation.Semigroup (V, invalid, isValid, unV)
@@ -112,4 +113,12 @@ main = runTest do
 
       Assert.assert "should should test if certain pairs in an object pass a test" $
         runV tt (\t -> true)
+    
+    test "getObjectKey" do
+    
+      let t1 = getObjectKey (toForeign {"a":1}) "a"
+      let t2 = getObjectKey (toForeign {"a":1}) "b"
+
+      Assert.assert "should get a value from an object" $ t1 == (Just 1)
+      Assert.assert "should get a value from an object" $ t2 == (Nothing :: Maybe Int)
         

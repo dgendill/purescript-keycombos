@@ -5,11 +5,21 @@
     <title></title>
     <script type="text/javascript" src="main.js"></script>
     <script type="text/javascript">
-      App.jsSetup({
-        "onKeyDown":1
+      window.addEventListener('load', function() {
+        console.log('loaded');
+        App.jsSetup({
+          "onKeyDown":function(key, state) {
+            console.log(key, state);
+          },
+          "onKeyUp":function(key, state) {
+            console.log(key, state);
+          },
+          "onComboRelease":function(keyPressTimes) {
+            console.log(keyPressTimes);
+          }
+        });
       })
     </script>
-
   </head>
   <body>
 

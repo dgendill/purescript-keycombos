@@ -11,21 +11,29 @@ module KeyCombo.FFI (
     objectKeyEquals,
     setDefaultKeys,
     specifyNoun,
-    allObjectPairs
+    allObjectPairs,
+    allObjectPairsUser,
+    isFunction,
+    isFunction',
+    getObjectKey,
+    ffiEff1ToAff,
+    ffiEff2ToAff
   ) where
 
 import Prelude
 
+import Control.Monad.Aff (Aff)
+import Control.Monad.Aff.Compat (EffFnAff(..), fromEffFnAff)
 import Control.Monad.Eff.Exception (Error, error)
 import Control.Monad.Error.Class (throwError)
 import Data.Array (foldMap, foldl, init, last, singleton, tail, unsafeIndex)
 import Data.Bifunctor (lmap)
 import Data.Const (Const(..))
-import Data.Foldable (length, surround)
+import Data.Foldable (class Foldable, length, surround)
 import Data.Foreign (Foreign)
 import Data.Foreign as Foreign
 import Data.Function.Uncurried (Fn2, mkFn2)
-import Data.Maybe (fromMaybe)
+import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Monoid (mempty)
 import Data.Monoid.Conj (Conj(..))
 import Data.Newtype (unwrap)
@@ -46,6 +54,15 @@ foreign import objectKeyEqualsImpl :: forall a. Foreign -> String -> a -> Boolea
 foreign import setObjectKeyValueImpl :: forall a. Foreign -> String -> a -> Foreign
 foreign import allObjectPairsImpl :: Foreign -> Array String -> (Fn2 String Foreign Boolean) -> Boolean
 foreign import isFunctionImpl :: Foreign -> Boolean
+foreign import getObjectKeyImpl :: forall a. Foreign -> String -> (a -> Maybe a) -> Maybe a -> Maybe a
+foreign import ffiEffFn1ToAffImpl :: forall e. Foreign -> Foreign -> EffFnAff e Unit
+foreign import ffiEffFn2ToAffImpl :: forall e. Foreign -> Foreign -> Foreign -> EffFnAff e Unit
+
+ffiEff1ToAff :: forall e. Partial => Foreign -> Foreign -> Aff e Unit
+ffiEff1ToAff f a = fromEffFnAff $ ffiEffFn1ToAffImpl f a
+
+ffiEff2ToAff :: forall e. Partial => Foreign -> Foreign -> Foreign -> Aff e Unit
+ffiEff2ToAff f a b = fromEffFnAff $ ffiEffFn2ToAffImpl f a b
 
 allObjectPairs :: Foreign -> Array String -> (String -> Foreign -> Boolean) -> V (Array String) Boolean
 allObjectPairs f keys fn = unwrap <$> (foldMap Conj) <$> traverse (\key ->
@@ -54,10 +71,24 @@ allObjectPairs f keys fn = unwrap <$> (foldMap Conj) <$> traverse (\key ->
       else invalid $ [key]
   ) keys
 
-allObjectPairsUser :: Foreign -> Array String -> String -> (String -> Foreign -> Boolean) -> V (Array Error) Boolean
+getObjectKey :: forall a. Foreign -> String -> Maybe a
+getObjectKey f key = getObjectKeyImpl f key Just Nothing
+
+allObjectPairsUser :: Foreign -> Array String -> String -> (String -> Foreign -> Boolean) -> V (Array String) Boolean
 allObjectPairsUser f keys reason fn = allObjectPairs f keys fn # (lmap \keys -> [
-  error $ senta $ "'s " <> (quoteAndSeperate keys) <> " " <> reason
-])
+    senta $ (pluralize "property" keys)
+    <> " " <> (quoteAndSeperate keys)
+    <> " did not pass the test '" <> reason <> "'"
+  ])
+
+pluralize :: forall a f. (Foldable f) => String -> f a -> String
+pluralize "property" a = case (length a) of
+  1 -> "property"
+  _ -> "properties"
+pluralize c _ = c
+
+isFunction' :: Foreign -> Boolean
+isFunction' = isFunctionImpl
 
 isFunction :: Foreign -> V (Array String) Foreign
 isFunction f = case isFunctionImpl f of
@@ -76,9 +107,9 @@ hasReqKeys f keys =
     [] -> pure unit
     a -> invalid a
     
-hasReqKeysUser :: forall a. Foreign -> Array String -> V (Array Error) Unit
+hasReqKeysUser :: forall a. Foreign -> Array String -> V (Array String) Unit
 hasReqKeysUser f a = hasReqKeys f a # (lmap \keys -> [
-  error $ "is missing keys " <> quoteAndSeperate keys
+  senta $ "is missing keys " <> quoteAndSeperate keys
 ])
 
 hasAtLeastOneOf :: forall a. Foreign -> Array String -> V (Array String) Unit
