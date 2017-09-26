@@ -119,11 +119,9 @@ exports.getObjectKeyImpl = function(o) {
   return function(key) {
     return function(just) {
       return function(nothing) {
-
         if (o && o.hasOwnProperty(key)) {
           return just(o[key]);
         } else {
-          console.log(o, key)
           return nothing;
         }
       }
@@ -155,4 +153,8 @@ exports.ffiEffFn2ToAffImpl = function ffiEffFn2ToAffImpl(fn) {
       }    
     }
   }
+}
+
+exports.isStringImpl = function(s) {
+  return typeof s == "string";
 }

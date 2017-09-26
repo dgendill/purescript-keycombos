@@ -10,6 +10,7 @@ module KeyCombo.FFI (
     mutateObject,
     objectKeyEquals,
     setDefaultKeys,
+    setDefaultKey,
     specifyNoun,
     allObjectPairs,
     allObjectPairsUser,
@@ -17,7 +18,10 @@ module KeyCombo.FFI (
     isFunction',
     getObjectKey,
     ffiEff1ToAff,
-    ffiEff2ToAff
+    ffiEff2ToAff,
+    isString,
+    isString',
+    setObjectKeyValue
   ) where
 
 import Prelude
@@ -33,11 +37,12 @@ import Data.Foldable (class Foldable, length, surround)
 import Data.Foreign (Foreign)
 import Data.Foreign as Foreign
 import Data.Function.Uncurried (Fn2, mkFn2)
+import Data.List.Lazy (reverse)
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Monoid (mempty)
 import Data.Monoid.Conj (Conj(..))
 import Data.Newtype (unwrap)
-import Data.String (joinWith, trim)
+import Data.String (joinWith, toUpper, trim)
 import Data.Symbol (class IsSymbol, SProxy, reflectSymbol)
 import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..))
@@ -54,9 +59,11 @@ foreign import objectKeyEqualsImpl :: forall a. Foreign -> String -> a -> Boolea
 foreign import setObjectKeyValueImpl :: forall a. Foreign -> String -> a -> Foreign
 foreign import allObjectPairsImpl :: Foreign -> Array String -> (Fn2 String Foreign Boolean) -> Boolean
 foreign import isFunctionImpl :: Foreign -> Boolean
+foreign import isStringImpl :: Foreign -> Boolean
 foreign import getObjectKeyImpl :: forall a. Foreign -> String -> (a -> Maybe a) -> Maybe a -> Maybe a
 foreign import ffiEffFn1ToAffImpl :: forall e. Foreign -> Foreign -> EffFnAff e Unit
 foreign import ffiEffFn2ToAffImpl :: forall e. Foreign -> Foreign -> Foreign -> EffFnAff e Unit
+
 
 ffiEff1ToAff :: forall e. Partial => Foreign -> Foreign -> Aff e Unit
 ffiEff1ToAff f a = fromEffFnAff $ ffiEffFn1ToAffImpl f a
@@ -95,6 +102,14 @@ isFunction f = case isFunctionImpl f of
   true -> pure f
   false -> invalid ["is not a function."]
 
+isString :: Foreign -> V (Array String) Foreign
+isString f = case isStringImpl f of
+  true -> pure f
+  false -> invalid ["is not a string."]
+
+isString' :: Foreign -> Boolean
+isString' = isStringImpl
+
 getFunctionArgs :: Foreign -> Array String
 getFunctionArgs = getFunctionArgsImpl
 
@@ -127,13 +142,20 @@ mutateObject :: forall a b. Partial => Foreign -> Array String -> (a -> b) -> V 
 mutateObject f keys fn = pure $ mutateObjectImpl f keys fn
 
 setObjectKeyValue :: forall a b. Partial => Foreign -> String -> a -> Foreign
-setObjectKeyValue f key value = setObjectKeyValueImpl f key value
+setObjectKeyValue = setObjectKeyValueImpl
+
+setDefaultKey' :: forall a. Partial => Foreign -> String -> a -> Foreign
+setDefaultKey' f key value =
+  if not isValid $ hasAtLeastOneOf f [key]
+    then setObjectKeyValue f key value
+    else f
+
+setDefaultKey :: forall a. Partial => Foreign -> String -> a -> V (Array String) Foreign
+setDefaultKey f s v = pure $ setDefaultKey' f s v
 
 setDefaultKeys :: forall a. Partial => Foreign -> Array (Tuple String a) -> V (Array String) Foreign
-setDefaultKeys f keys = pure $ foldl (\ff (Tuple key val) ->
-    if not isValid $ hasAtLeastOneOf ff [key]
-      then setObjectKeyValue ff key val
-      else ff
+setDefaultKeys f keys = pure $ foldl (\ff (Tuple key value) ->
+    setDefaultKey' ff key value
   ) f keys
 
 mapLast :: forall a b. (a -> a) -> Array a -> Array a

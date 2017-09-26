@@ -11,7 +11,7 @@ import KeyCombo.Types
 import Prelude
 
 import Control.Coroutine (connect, runProcess)
-import Control.Monad.Aff (Aff, forkAff, runAff_)
+import Control.Monad.Aff (Aff, forkAff, runAff_, throwError)
 import Control.Monad.Aff.Compat (EffFn1, EffFn2, fromEffFnAff, mkEffFn1, mkEffFn2)
 import Control.Monad.Aff.Console as Affc
 import Control.Monad.Eff (Eff)
@@ -20,16 +20,19 @@ import Control.Monad.Eff.Console (error, log, logShow)
 import Control.Monad.Eff.Ref (newRef)
 import DOM.HTML (window)
 import DOM.HTML.Window (document)
-import DOM.Node.Types (Element)
+import DOM.Node.ParentNode (QuerySelector(..), querySelector, querySelectorAll)
+import DOM.Node.Types (Element, elementToParentNode)
 import Data.Bifunctor (lmap)
 import Data.Either (Either(..))
 import Data.Foldable (traverse_)
 import Data.Foreign (Foreign)
-import Data.Maybe (Maybe(..))
+import Data.Functor (voidRight)
+import Data.Maybe (Maybe(..), fromMaybe)
 import Data.StrMap (empty)
 import Data.String (joinWith)
+import Data.Traversable (sequence)
 import Data.Tuple (Tuple(..))
-import Data.Validation.Semigroup (V, unV)
+import Data.Validation.Semigroup (V, isValid, unV)
 import Debug.Trace (traceAnyM)
 import KeyCombo.Types as Types
 import Partial.Unsafe (unsafePartial)
@@ -46,9 +49,6 @@ doNothing1 a = pure unit
 
 doNothing2 :: forall e a b. (Show a) => (Show b) => a -> b -> Aff (Effects e) Unit
 doNothing2 a b = pure unit
-
-
-
 
 validateSetup :: Foreign -> V (Array String) Foreign
 validateSetup f = unsafePartial $
@@ -94,60 +94,64 @@ validateSetup f = unsafePartial $
     Tuple "onExactRelease" []
   ]
 
+fromNestedMaybe :: forall a. a -> Maybe (Maybe a) -> a
+fromNestedMaybe a m = fromMaybe a (fromMaybe Nothing m)
 
+-- | Accept a foreign configuation object and
+-- | attempt to run the key combo handler on the
+-- | document
 jsSetup :: forall e. Foreign -> Eff (Effects e) Unit
-jsSetup f = do
-  let result = unV
-        (\err -> Left $ joinWith " " err)
-        (\s -> Right "Success")
-        (validateSetup f)
-  
-  void $ traceAnyM f
+jsSetup config = do
+  document' <- unsafeCoerce <$> (window >>= document)
 
-  let maybeFn = (
-        addKeyComboListener
-        <$> (OnKeyDown <$> (getObjectKey f "onKeyDown"))
-        <*> (OnKeyUp <$> (getObjectKey f "onKeyUp"))
-        <*> (OnComboRelease <$> (getObjectKey f "onComboRelease"))
-        <*> (OnExactRelease <$> (getObjectKey f "onExactRelease"))
-      )
+  -- isString a *> 
 
-  case maybeFn of
-    Just fn -> do
+  elementOk <- case getObjectKey config "element" of
+    Just selectorOrElement -> do
+      if (isString' selectorOrElement)
+        then do
+          r <- querySelector
+                  (QuerySelector (unsafeCoerce selectorOrElement))
+                  (elementToParentNode document')
+
+          case r of  
+            Just e ->
+              pure true <*
+                (pure
+                $ unsafePartial
+                $ setObjectKeyValue config "element" e)
+            Nothing -> do
+              error $
+                "Could not find query selector '"
+                <> (unsafeCoerce selectorOrElement)
+                <> "' on the page."
+              pure false
+        else pure true
+    Nothing -> pure true
+
+  if elementOk
+    then do
+      let result = unV
+            (\err -> Left $ joinWith " " err)
+            (\s -> Right "Success")
+            (validateSetup config) 
+
+      -- void $ traceAnyM f
+
       case result of
         Left a -> error a
         Right a -> runAff_ (\r -> case r of
             Left e -> error $ show e
             Right r -> log "ok"
-          ) fn
-    Nothing -> do
-      log "failure"
-      logShow result
-
-  
-
---   validateSetup f $>
---   ffiApply addKeyComboListenerOn
---     [ (ffi ffiObjKey "element" f)
---     , (ffiObjKey "onKeyDown" f)
---     , (unsafeCoerceObjKeyFn "onKeyUp" f)
---     , (unsafeCoerceObjKeyFn "onKeyComboRelease" f)
---     , (ffiObjKey "onExactRelease" f # ffiMap (
---         ffiFst >>> ffiTuple <<< ffiSnd
---                (ffiSnd ffiEffToAff)
---         <<< ffiTuple
---         )
---     ]
-
--- {
---   element : Element | Selector,
---   onKeyDown : function(key, state) {}
---   onKeyUp : function(key, state) {}
---   onKeyComboRelease : function(key, state) {}
---   onExactRelease : [
---     [["Control","Shift","+"], function() {}],
---     [["Control","Shift","-"], function() {}],
--- }
+          ) `traverse_` (
+            addKeyComboListenerOn
+            <$> (getObjectKey config "element")
+            <*> (OnKeyDown <$> (getObjectKey config "onKeyDown"))
+            <*> (OnKeyUp <$> (getObjectKey config "onKeyUp"))
+            <*> (OnComboRelease <$> (getObjectKey config "onComboRelease"))
+            <*> (OnExactRelease <$> (getObjectKey config "onExactRelease"))
+          )
+    else pure unit
 
 -- | Listen for keyboard input on the document element
 addKeyComboListener :: forall e
