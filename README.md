@@ -1,11 +1,9 @@
 A library for handling multiple simultaneous keyboard presses.
 
-- [x] exact triggers
-- [x] fast release trigger
+- [x] js-only implementation using UMD
+- [x] PureScript exact triggers
+- [x] PureScript fast release trigger
 - [ ] minify code, rollup
-- [x] js-only usage interface
-  - [x] onKeyUp
-  - [x] onKeyDown
-  - [x] onComboRelease
-  - [ ] onExactRelease
+- [ ] Remove JavaScript interface on top of PureScript
 - [ ] demo
+- [ ] documement native javascript library
