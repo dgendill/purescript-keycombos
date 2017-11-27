@@ -94,17 +94,12 @@ validateSetup f = unsafePartial $
     Tuple "onExactRelease" []
   ]
 
-fromNestedMaybe :: forall a. a -> Maybe (Maybe a) -> a
-fromNestedMaybe a m = fromMaybe a (fromMaybe Nothing m)
-
 -- | Accept a foreign configuation object and
 -- | attempt to run the key combo handler on the
 -- | document
 jsSetup :: forall e. Foreign -> Eff (Effects e) Unit
 jsSetup config = do
   document' <- unsafeCoerce <$> (window >>= document)
-
-  -- isString a *> 
 
   elementOk <- case getObjectKey config "element" of
     Just selectorOrElement -> do
